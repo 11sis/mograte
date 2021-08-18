@@ -1,0 +1,64 @@
+{
+  "name": "@my-scope/my-package",
+  "version": "0.0.1",
+  "description": "A typescript package",
+  "keywords": [],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "lint": "eslint './src/**/*.{js,ts,tsx}'",
+    "test": "ts-mocha -p tsconfig.json tests/**/*.test.ts",
+    "test:ci": "nyc ts-mocha -p tsconfig.json tests/**/*.test.ts",
+    "test:watch": "ts-mocha -p tsconfig.json tests/**/*.test.ts,tests/*.test.ts --watch",
+    "clean:dist": "node -e \"require('del').sync(['dist/**'])\"",
+    "prebuild": "npm run clean:dist",
+    "build": "tsc --listFiles",
+    "watch": "tsc -w",
+    "start": "npm link && nodemon",
+    "amendCommit": "git add . -A && git commit --amend --no-edit",
+    "version:branch": "npm version prerelease --preid $(git rev-parse --short=8 HEAD^) --no-git-tag",
+    "prepublish:branch": "npm run version:branch",
+    "publish:branch": "npm publish --tag $(git rev-parse --short=8 HEAD^) --access public",
+    "postpublish:branch": "npm run amendCommit",
+    "version:beta": "npm version prerelease --preid beta --no-git-tag",
+    "prepublish:beta": "npm run version:beta",
+    "publish:beta": "npm publish --tag beta --access public",
+    "postpublish:beta": "npm run amendCommit",
+    "buildAndPublishBranch": "npm run build && npm run publish:branch",
+    "buildAndPublishBeta": "npm run build && npm run publish:beta && npm dist-tag add @animus-bi/redxs@$(npm -s run env echo '$npm_package_version') latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/my-scope/my-package"
+  },
+  "author": {
+    "name": "AuthorNameHere",
+    "email": "authoremailhere@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/my-scope/my-package#readme",
+  "devDependencies": {
+    "@types/chai": "^4.2.13",
+    "@types/expect": "^24.3.0",
+    "@types/mocha": "^8.0.3",
+    "@types/node": "^14.11.2",
+    "@types/sinon": "^9.0.8",
+    "@typescript-eslint/eslint-plugin": "^4.3.0",
+    "@typescript-eslint/parser": "^4.3.0",
+    "chai": "^4.2.0",
+    "del": "^6.0.0",
+    "eslint": "^7.10.0",
+    "eslint-config-prettier": "^6.12.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "mocha": "^8.1.3",
+    "nodemon": "^2.0.4",
+    "nyc": "^15.1.0",
+    "prettier": "^2.1.2",
+    "sinon": "^9.1.0",
+    "ts-mocha": "^7.0.0",
+    "typescript": "^4.0.3"
+  },
+  "files": [
+    "dist/**/*"
+  ]
+}
