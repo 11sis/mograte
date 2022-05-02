@@ -1,0 +1,10 @@
+import { MigrationContext } from 'mograte';
+
+export default {
+    up: async (context: MigrationContext): Promise<any> => {
+
+    },
+    down: async (context: MigrationContext): Promise<any> => {
+        
+    }
+}

@@ -68,3 +68,7 @@ typings/
 .sonarlint/
 
 .idea/
+
+tmp
+
+.mogrc.*
