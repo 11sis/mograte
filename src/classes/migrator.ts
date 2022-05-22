@@ -38,9 +38,6 @@ export class Migrator {
     }
 
     private getOrderedMigrationDirectoryContents (): MigrationFile[] {
-        if (config.language === 'ts') {
-            require('ts-node').register();
-        }
 
         const migrationsDir = path.resolve(process.cwd(), config.migrationsDir);
         if (!fs.existsSync(migrationsDir)) {
@@ -52,12 +49,29 @@ export class Migrator {
             .filter(item => !item.isDirectory() && ~item.name.indexOf(`.${config.language}`))
             .map(item => item.name);
 
+        if (config.language === 'ts') {
+          if (fs.existsSync(config.tsconfig as any)) {
+            require('ts-node').register({
+              project: config.tsconfig,
+              files: migrationFiles,
+            });
+          }
+        }
+
         const orderedMigrations = (migrationFiles || [])
             .sort((a, b) => (a===b) ? 0 : ((a < b) ? -1 : 1)) // sort ascending
             .map((file) => {
                 const [date, name] = file.replace(`.${config.language}`, '').split('_');
                 const modulePath = path.resolve(process.cwd(), config.migrationsDir, file);
-                const module = require(modulePath);
+                let module
+                try {
+                  module = require(modulePath);
+                } catch(ex: any) {
+                  logger.error(ex.message, ex.stack);
+                  logger.info('TypeScript error; check your code and try again.');
+                  logger.info('................Nothing migrated................');
+                  return process.exit(1);
+                }
                 const { up, down } = module.default ? module.default : module;
                 return new MigrationFile(Number(date), name || '', [up, down], file);
             });

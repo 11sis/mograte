@@ -11,7 +11,7 @@
     "noImplicitAny": false,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
-    "strictPropertyInitialization": true,
+    "strictPropertyInitialization": false,
     "noImplicitThis": true,
     "alwaysStrict": true,
     "noUnusedLocals": true,
@@ -19,7 +19,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
-    "rootDirs": ["./", "./src"],
+    "rootDirs": ["./", "./src", "!tmp"],
     "typeRoots": ["./types", "./@types", "node_modules/@types"],
     "types": ["node", "mocha"],
     "esModuleInterop": true,
@@ -29,5 +29,5 @@
     "incremental": true
   },
   "include": ["src", "tests/index.test.ts"],
-  "exclude": ["node_modules", "**/tests/*", "coverage", ".nyc_output", "tmp"]
+  "exclude": ["node_modules", "**/tests/*", "coverage", ".nyc_output", "tmp", "**/tmp/*"]
 }
