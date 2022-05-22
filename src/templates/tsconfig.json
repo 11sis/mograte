@@ -1,0 +1,41 @@
+{
+  "ts-node": {
+    "module": "esnext",
+    "transpileOnly": true,
+    "files": true,
+    "compilerOptions": {
+      "allowJs": false,
+      "checkJs": false,
+      "strict": false,
+      "alwaysStrict": false,
+      "strictPropertyInitialization": false,
+      "skipLibCheck": true, 
+      "strictNullChecks": false,
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "preserveConstEnums": true,
+      "suppressImplicitAnyIndexErrors": true,
+      "inlineSources": true
+    }
+  },
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "rootDir": "../",
+    "lib": ["es2021"],
+    "removeComments": true,
+    "moduleResolution": "node",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "sourceMap": true,
+    "target": "es2017",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true, 
+    "strictPropertyInitialization": false,
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "strictNullChecks": false,
+    "outDir": "../../dist",
+  },
+  "include": ["../../src", "tests/index.test.ts"],
+  "exclude": ["node_modules", "**/tests/*", "coverage", ".nyc_output", "tmp", "**/tmp/*"]
+}

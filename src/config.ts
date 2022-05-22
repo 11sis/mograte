@@ -53,23 +53,23 @@ const setUserFn = (json: any) => {
 }
 
 const getFileConfig = (filename: string, checkTs = false): any => {
-    const mogrcFileExists = fs.existsSync(filename);
-    if (mogrcFileExists) {
-        let mogrcJson;
-        if (checkTs) {
-            require('ts-node').register()
-            mogrcJson = require(path.resolve(process.cwd(), filename));
-            if (mogrcJson && mogrcJson.default) {
-                mogrcJson = mogrcJson.default;
-            }
-        } else {
-            mogrcJson = require(path.resolve(process.cwd(), filename));
-        }
-        if (mogrcJson) { 
-            mogrcJson.user = setUserFn(mogrcJson);
-            return mogrcJson as MograteConfig;
-        }
+  const mogrcFileExists = fs.existsSync(filename);
+  if (mogrcFileExists) {
+    let mogrcJson;
+    if (checkTs) {
+      require('ts-node').register()
+      mogrcJson = require(path.resolve(process.cwd(), filename));
+      if (mogrcJson && mogrcJson.default) {
+        mogrcJson = mogrcJson.default;
+      }
+    } else {
+      mogrcJson = require(path.resolve(process.cwd(), filename));
     }
+    if (mogrcJson) { 
+      mogrcJson.user = setUserFn(mogrcJson);
+      return mogrcJson as MograteConfig;
+    }
+  }
 }
 
 const getConfig = (): MograteConfig => {
@@ -134,65 +134,72 @@ const getConfig = (): MograteConfig => {
 }
 
 const validateConfig = (config: MograteConfig): MograteConfig => {
-    if (config.skipValidation) {
-        return {} as any;
-    }
+  if (config.skipValidation) {
+    return {} as any;
+  }
 
-    if (config.awsConfig) {
-        if (!(config.awsConfig as any).profile) {
-            if (
-                !(config.awsConfig as any).secretAccessKey ||
-                !(config.awsConfig as any).accessKeyId
-            ) {
-                console.error(`You must specify 'awsConfig' in config. See documentation`);
-                process.exit(1);
-            } else if (!(config.awsConfig as any).region) {
-                (config.awsConfig as any).region = 'us-east-1';
-            }
-            process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || (config.awsConfig as any).accessKeyId;
-            process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || (config.awsConfig as any).secretAccessKey;
-            process.env.AWS_REGION = process.env.AWS_REGION || (config.awsConfig as any).region;
-        } else {
-            process.env.AWS_SDK_LOAD_CONFIG = 'true';
-            process.env.AWS_PROFILE = process.env.AWS_PROFILE || (config.awsConfig as any).profile;
-        }
+  if (config.awsConfig) {
+    if (!(config.awsConfig as any).profile) {
+      if (
+        !(config.awsConfig as any).secretAccessKey ||
+        !(config.awsConfig as any).accessKeyId
+      ) {
+        console.error(`You must specify 'awsConfig' in config. See documentation`);
+        process.exit(1);
+      } else if (!(config.awsConfig as any).region) {
+        (config.awsConfig as any).region = 'us-east-1';
+      }
+      process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || (config.awsConfig as any).accessKeyId;
+      process.env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || (config.awsConfig as any).secretAccessKey;
+      process.env.AWS_REGION = process.env.AWS_REGION || (config.awsConfig as any).region;
     } else {
-        if (
-            process.env.AWS_ACCESS_KEY_ID &&
-            process.env.AWS_SECRET_ACCESS_KEY &&
-            process.env.AWS_REGION
-        ) {
-            delete process.env.AWS_SDK_LOAD_CONFIG;
-            (config as any).awsConfig = {} as any;
-            (config.awsConfig as any).accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-            (config.awsConfig as any).secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-            (config.awsConfig as any).region = process.env.AWS_REGION
-        } else {
-            if (process.env.AWS_PROFILE) {
-                process.env.AWS_SDK_LOAD_CONFIG = 'true';
-                (config.awsConfig as any).profile = process.env.AWS_PROFILE;
-            } else {
-                logger.error(`No **awsConfig** in configuration, and aws environment variables are inadequate to connect`);
-                process.exit(1);
-            }
-        }
+      process.env.AWS_SDK_LOAD_CONFIG = 'true';
+      process.env.AWS_PROFILE = process.env.AWS_PROFILE || (config.awsConfig as any).profile;
     }
-
-    if (!config.language) {
-        config.language = 'js';
+  } else {
+    if (
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_REGION
+    ) {
+        delete process.env.AWS_SDK_LOAD_CONFIG;
+        (config as any).awsConfig = {} as any;
+        (config.awsConfig as any).accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+        (config.awsConfig as any).secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+        (config.awsConfig as any).region = process.env.AWS_REGION
+    } else {
+      if (process.env.AWS_PROFILE) {
+        process.env.AWS_SDK_LOAD_CONFIG = 'true';
+        (config.awsConfig as any).profile = process.env.AWS_PROFILE;
+      } else {
+        logger.error(`No **awsConfig** in configuration, and aws environment variables are inadequate to connect`);
+        process.exit(1);
+      }
     }
+  }
 
-    if (!config.migrationsDir) {
-        config.migrationsDir = './src/db/migrations';
+  if (!config.language) {
+    config.language = 'js';
+  } else {
+    if (config.language === 'ts') {
+      const defaultTsconfigPath = path.resolve(__dirname, 'templates/tsconfig.json');
+      if (!config.tsconfig) {
+        config.tsconfig = defaultTsconfigPath
+      }
     }
+  }
 
-    if (typeof config.migrationsTable === 'string' || !config.migrationsTable) {
-        config.migrationsTableDef = getMigrationsTableParams(config.migrationsTable || 'migrations');
-    } else if (typeof config.migrationsTable === 'object') {
-        config.migrationsTableDef = config.migrationsTable;
-    }
+  if (!config.migrationsDir) {
+    config.migrationsDir = './src/db/migrations';
+  }
 
-    return config;
+  if (typeof config.migrationsTable === 'string' || !config.migrationsTable) {
+    config.migrationsTableDef = getMigrationsTableParams(config.migrationsTable as string || 'migrations');
+  } else if (typeof config.migrationsTable === 'object') {
+    config.migrationsTableDef = config.migrationsTable;
+  }
+
+  return config;
 }
 
 export const config = validateConfig(getConfig());
