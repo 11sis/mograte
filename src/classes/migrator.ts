@@ -8,7 +8,7 @@ import { MigrationFile } from './migration-file';
 const webpack = require('webpack');
 
 export class Migrator {
-  private files: MigrationFile[] = [];
+  private orderedMigrationFiles: MigrationFile[] = [];
   private noRemainingMigrations = false;
   private migrationsDir: string; 
   private tmpdir: string;
@@ -38,17 +38,23 @@ export class Migrator {
     
   private getMigrationUpperBound(numberOrMigration?: string): number {
     let index = 0;
-    if ( numberOrMigration && isNaN(Number(numberOrMigration)) ) {
+    /**
+     * if numberOrMigration is a file name or part of a file name,
+     *   - get the numeric value from the front of the file name
+     *   - use that number to find the file that contains that numeric value
+     *   - set the return index to the index of that file
+     **/ 
+    if ( numberOrMigration && isNaN(Number(numberOrMigration)) ) { //
       let [migIndex,] = numberOrMigration.replace(`.${config.language}`, '').split('_');
-      let matches = this.files.filter((f) => ~f.file.indexOf(migIndex));
+      let matches = this.orderedMigrationFiles.filter((f) => ~f.file.indexOf(migIndex));
       if (matches.length === 1) { 
-        index = this.files.map((f) => f.file).indexOf(matches[0].file) + 1;
+        index = this.orderedMigrationFiles.map((f) => f.file).indexOf(matches[0].file) + 1;
       }
-    } else if (numberOrMigration) { // input is a number
-      const theNum = Math.max(0, Number(numberOrMigration));
-      index = theNum === 0 ? this.files.length : theNum;
+    } else if (numberOrMigration) { // input is presumed a number
+      const theNum = Math.max(0, Number(numberOrMigration)); // set to 0 if negative
+      index = theNum === 0 ? this.orderedMigrationFiles.length : theNum;
     } else {
-      index = this.files.length;
+      index = this.orderedMigrationFiles.length;
     }
     return index;
   }
@@ -76,18 +82,26 @@ export class Migrator {
 
     const migrationFiles = fs.readdirSync(this.migrationsDir, { withFileTypes: true })
       .filter(item => !item.isDirectory() && ~item.name.indexOf(`.${config.language}`))
-      .map(item => item.name);
+      .map(item => {
+        const num = item.name.split('_')[0];
+        return {
+          file: item.name,
+          i: !isNaN(Number(num)) ? Number(num) : item.name
+        }
+      })
+      .sort((a, b) => (a.i===b.i) ? 0 : ((a.i < b.i) ? -1 : 1));
 
-    const orderedMigrations = await Promise.all((migrationFiles || [])
-      .sort((a, b) => (a===b) ? 0 : ((a < b) ? -1 : 1)) // sort ascending
-      .map(async (file) => {
-        const [date, name] = file.replace(`.${config.language}`, '').split('_');
-        let modulePath = path.resolve(process.cwd(), config.migrationsDir, file);
+    const orderedMigrations = await Promise.all(
+      (migrationFiles || [])
+      .map(async (p) => {
+        const pk = p.i as number;
+        const [,name] = p.file.replace(`.${config.language}`, '').split('_');
+        let modulePath = path.resolve(process.cwd(), config.migrationsDir, p.file);
 
         let module;
         try {
           if (config.language === 'ts') {
-            modulePath = await this.transpileTsFile(file);
+            modulePath = await this.transpileTsFile(p.file);
           }
           
           module = require(modulePath);
@@ -98,7 +112,7 @@ export class Migrator {
           return process.exit(1);
         }
         const { up, down } = module.default ? module.default : module;
-        return Promise.resolve(new MigrationFile(Number(date), name || '', [up, down], file));
+        return Promise.resolve(new MigrationFile(pk, name || '', [up, down], p.file));
       }));
 
     return this.isUp ? (orderedMigrations as any) : orderedMigrations.reverse();
@@ -129,25 +143,64 @@ export class Migrator {
     return Promise.resolve(this.isUp ? sortedMigrations: sortedMigrations.reverse());
   }
 
-  private async getActionableMigrationsAsync (numberOrMigrationToStopAt?: string): Promise<MigrationFile[]> { //files: any[], records: any[]) {
-    // get the migration to stop at
-    const migrationIndex = this.getMigrationUpperBound(numberOrMigrationToStopAt);
+  private getOutOfSyncMigrations(orderedMigrationRecords: MigrationFile[]): boolean {
+    for (let i = 0; i < orderedMigrationRecords.length; i++) {
+      if (this.orderedMigrationFiles[i].file !== orderedMigrationRecords[i].file) {
+        return true;
+      }
+    }
 
-    // get migrations from 0 to stop point
-    const boundedMigrations = [ ...this.files.slice(0, migrationIndex) ];
+    return false;
+  }
+
+  private getOutOfSyncRecordsMessage(migrationRecords: MigrationFile[]) {
+    const files = this.orderedMigrationFiles.map((m) => m.file);
+    const expected = [ ...migrationRecords.map((m) => m.file), '{ remaining migrations }' ]
+    return [
+      ``,
+      `Migrations are out of sync.\n`,
+      `  - expected: ${JSON.stringify(expected)}`,
+      `  - got: ${JSON.stringify(files)}`,
+      ``,
+      `Files or records were manually changed, or something failed along the way.`,
+      ``,
+      `Try running 'refresh' or 'reset' to re-sync migrations and BE CAREFUL.`,
+      ``
+    ].join('\n\t');
+  } 
+
+  private async getActionableMigrationsAsync (numberOrMigrationToStopAt?: string): Promise<MigrationFile[]> { //files: any[], records: any[]) {
 
     // get all migration records from db
     const migrationRecords = [ ...(await this.getMigrationsRecordsAsync()) ];
 
+    // files should match record sequentially for all records
+    const outOfSyncRecords = this.getOutOfSyncMigrations(migrationRecords);
+
+    // if files and records dont match sequentially, we're out of sync, die
+    if (outOfSyncRecords) {
+      logger.error(this.getOutOfSyncRecordsMessage(migrationRecords));
+      return process.exit(1);
+    }
+
+    // get the migration to stop at
+    const migrationIndex = this.getMigrationUpperBound(numberOrMigrationToStopAt);
+
+    // get migrations from 0 to stop point
+    const boundedMigrationFiles = [ ...this.orderedMigrationFiles.slice(0, migrationIndex) ];
+
+
     const actionableMigrations: any[] = [];
-    while(boundedMigrations.length) {
-      const migrationFile = boundedMigrations.shift();
+    while(boundedMigrationFiles.length) {
+      const migrationFile = boundedMigrationFiles.shift();
       const record = migrationRecords.shift();
       if (this.isUp) {
+        // if there is a migration file, and the migration file doesn't match the record, add to actionable migrations
         if ((migrationFile && !record) || (migrationFile && (migrationFile.file !== record.file))) {
           actionableMigrations.push(migrationFile);
         }
       } else {
+        // if there is a migration file and the file doesn't match the record, add to actionable migrations
         if ((migrationFile && record) && (migrationFile.file === record.file)) {
           actionableMigrations.push(migrationFile);
         } else if (record) {
@@ -213,7 +266,7 @@ export class Migrator {
   }
 
   async getDelta (): Promise<number> {
-    const boundedMigrations = [ ...this.files ];
+    const boundedMigrations = [ ...this.orderedMigrationFiles ];
     const migrationRecords = [ ...(await this.getMigrationsRecordsAsync()) ];
     let total = 0;
     while(boundedMigrations.length) {
@@ -227,7 +280,7 @@ export class Migrator {
   }
 
   async statusMigrations (): Promise<void> {
-    const boundedMigrations = [ ...this.files ];
+    const boundedMigrations = [ ...this.orderedMigrationFiles ];
     const migrationRecords = [ ...(await this.getMigrationsRecordsAsync(true)) ];
     if (!boundedMigrations.length) {
       logger.info(`No migrations. Create some.`);
@@ -249,7 +302,7 @@ export class Migrator {
   }
 
   async migrateAsync(message: string, numberOrMigration?: string): Promise<any> {
-    this.files = await this.getOrderedMigrationDirectoryContents();
+    this.orderedMigrationFiles = await this.getOrderedMigrationDirectoryContents();
     // get any migrations in boundedMigrations that have not been run yet
     const remainingMigrations = await this.getActionableMigrationsAsync(numberOrMigration);
 

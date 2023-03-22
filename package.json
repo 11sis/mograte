@@ -1,6 +1,6 @@
 {
   "name": "mograte",
-  "version": "2.0.2",
+  "version": "2.0.3-beta.0",
   "description": "A package to handle DynamoDB migrations",
   "keywords": [
     "aws",
