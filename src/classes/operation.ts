@@ -1,4 +1,4 @@
-import { logger } from "../logger";
+import { logger } from '../logger';
 
 export class Operation {
 
@@ -20,4 +20,5 @@ export class Operation {
             }
         }
     }
+
 }

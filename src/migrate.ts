@@ -8,6 +8,10 @@ export const migrateDown = (number?: string) => {
     return new Migrator('down').migrateAsync('Nothing to migrate down', number);
 }
 
+export const resetMigrationsTable = () => {
+  return new Migrator('nuclear').migrateAsync('No migration records to reset');
+}
+
 export const listMigrations = () => {
     return new Migrator('').statusMigrations();
 }

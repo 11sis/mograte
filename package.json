@@ -1,6 +1,6 @@
 {
   "name": "mograte",
-  "version": "2.0.3-beta.0",
+  "version": "2.0.3-beta.13",
   "description": "A package to handle DynamoDB migrations",
   "keywords": [
     "aws",
@@ -23,7 +23,7 @@
     "test:ci": "nyc ts-mocha -p tsconfig.json tests/**/*.test.ts",
     "test:watch": "ts-mocha -p tsconfig.json tests/**/*.test.ts,tests/*.test.ts --watch",
     "clean:dist": "node -e \"require('del').sync(['dist/**'])\"",
-    "prebuild": "npm run clean:dist && copyfiles -a -u 1 'src/templates/*' dist && copyfiles -a -u 1 'src/bin/*.js' dist",
+    "prebuild": "npm run clean:dist && copyfiles -a -u 1 'src/templates/*' dist && copyfiles -a -u 1 'src/bin/*.js' dist && copyfiles -a -u 1 'node_modules/@types/node/*.d.ts' dist",
     "minify": "jsmin -o dist/*.min.js dist/*.js",
     "minify2": "uglifyjs --compress --mangle -o dist/ugly.js -- dist/**/*.js",
     "minify3": "rollup ./dist/index.js --file ./dist/bundle.js --format es",
@@ -41,7 +41,8 @@
     "publish:beta": "npm publish --tag beta --access public",
     "postpublish:beta": "npm run amendCommit",
     "buildAndPublishBranch": "npm run build && npm run publish:branch",
-    "buildAndPublishBeta": "npm run build && npm run publish:beta && npm dist-tag add @animus-bi/redxs@$(npm -s run env echo '$npm_package_version') latest"
+    "buildAndPublishBeta": "npm run build && npm run publish:beta && npm dist-tag add @animus-bi/redxs@$(npm -s run env echo '$npm_package_version') latest",
+    "babel": "babel"
   },
   "repository": {
     "type": "git",
@@ -54,14 +55,20 @@
   "license": "MIT",
   "homepage": "https://github.com/11sis/mograte#readme",
   "devDependencies": {
+    "@aws-sdk/node-http-handler": "^3.374.0",
+    "@babel/cli": "^7.24.1",
+    "@babel/core": "^7.24.4",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.1",
+    "@babel/preset-env": "^7.24.4",
+    "@babel/preset-typescript": "^7.24.1",
     "@types/chai": "^4.2.13",
     "@types/expect": "^24.3.0",
     "@types/mocha": "^8.2.3",
-    "@types/node": "^14.11.2",
+    "@types/node": "^14.18.63",
     "@types/sinon": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^4.3.0",
     "@typescript-eslint/parser": "^4.3.0",
-    "aws-sdk": "^2.1140.0",
+    "babel-loader": "^9.1.3",
     "chai": "^4.2.0",
     "copyfiles": "^2.4.1",
     "del": "^6.0.0",
@@ -74,21 +81,30 @@
     "prettier": "^2.1.2",
     "rollup": "^2.71.1",
     "sinon": "^9.1.0",
-    "ts-mocha": "^7.0.0",
-    "typescript": "^4.0.3",
-    "uglify-js": "^3.15.4"
+    "typescript": "^4.9.5",
+    "uglify-js": "^3.15.4",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
   },
   "files": [
     "dist/**/*"
   ],
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.556.0",
+    "@aws-sdk/lib-dynamodb": "3.556.0",
+    "@babel/plugin-syntax-top-level-await": "^7.14.5",
+    "@smithy/node-http-handler": "^2.5.0",
+    "esbuild": "^0.20.2",
+    "esrun": "^3.2.26",
+    "http2": "^3.3.7",
     "inquirer": "^8.2.4",
     "javascript-stringify": "^2.1.0",
     "minimist": "^1.2.6",
+    "node-polyfill-webpack-plugin": "^3.0.0",
+    "stream": "^0.0.2",
     "strip-json-trailing-commas": "^1.1.0",
     "ts-loader": "^9.3.0",
     "ts-node": "^10.7.0",
-    "webpack": "^5.72.1",
     "webpack-node-externals": "^3.0.0"
   }
 }

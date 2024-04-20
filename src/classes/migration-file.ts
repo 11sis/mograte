@@ -4,5 +4,6 @@ export class MigrationFile {
         public name: string,
         public funcs: any[],
         public file: string,
+        public path: string,
     ) { }
 }
