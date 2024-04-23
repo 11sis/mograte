@@ -1,8 +1,10 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { DynamoTableDefinition, MograteConfig } from './types';
 import { logger } from './logger';
 import stripJsonTrailingCommas from 'strip-json-trailing-commas';
+const webpack = require('webpack');
 
 const getMigrationsTableParams = (tableName: string): DynamoTableDefinition => {
     return {
@@ -53,27 +55,101 @@ const setUserFn = (json: any) => {
     return json.user;
 }
 
-const getFileConfig = (filename: string, checkTs = false): any => {
+const getNodeModulesDirectory = () => {
+    let currentDir = process.cwd();
+    while (currentDir !== path.parse(currentDir).root) {
+        const possibleNodeModulesPath = path.join(currentDir, 'node_modules');
+        if (fs.existsSync(possibleNodeModulesPath)) {
+            return possibleNodeModulesPath;
+        }
+        currentDir = path.dirname(currentDir);
+    }
+    return null;
+}
+
+const getTSConfig = async (filename: string): Promise<any> => {
+  const filePath = path.resolve(process.cwd(), filename);
+  const tmpDir = path.join(os.tmpdir(), '.tmp');
+  if (fs.existsSync(tmpDir)) {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+  fs.mkdirSync(tmpDir);
+  const webpackConfig = require(path.resolve(__dirname, 'templates/webpack.config'));
+  const tsconfigContents = require(path.resolve(__dirname, 'templates/tsconfig.json'));
+  const tsconfigFilePath = path.resolve(tmpDir, 'tsconfig.json');
+
+  const jsFile = path.resolve(tmpDir, path.basename(filename).replace('.ts', '.cjs'));
+  webpackConfig.output.filename = path.basename(filename).replace('.ts', '.cjs');
+  webpackConfig.entry = filePath;
+  webpackConfig.output.path = tmpDir;
+  webpackConfig.module.rules[0].options = {
+    configFile: tsconfigFilePath
+  }
+  tsconfigContents.files = [filePath];
+  const typeRoot= path.resolve(__dirname, '@types/node');
+  if (!tsconfigContents.compilerOptions.typeRoots.includes(typeRoot)) {
+    tsconfigContents.compilerOptions.typeRoots.push(typeRoot);
+    tsconfigContents.compilerOptions.typeRoots.push(path.dirname(typeRoot))
+  }
+
+  // symlink node_modules
+  const nodeModulesDir = getNodeModulesDirectory() as string;
+  fs.symlinkSync(nodeModulesDir, path.join(tmpDir, 'node_modules'), 'dir');
+
+  // write tsconfig
+  fs.writeFileSync(tsconfigFilePath, JSON.stringify(tsconfigContents, null, 2));
+
+  const prom = new Promise((resolve, reject) => {
+    webpack(webpackConfig, (error, stats) => {
+      if (error || stats.hasErrors()) {
+        return reject({ error, stats });
+      }
+      resolve(jsFile);
+    });
+  });
+  
+  try {
+    await prom;
+  }catch(err: any) {
+
+    for(let i = 0; i < err.stats.compilation.errors.length; i++){ 
+      const error = err.stats.compilation.errors[i];
+      logger.error(error.stack);
+    }
+    process.exit(1);
+  }
+
+  const module = require(jsFile);
+  return module.default ? module.default : module;
+}
+
+const getFileConfig = async (filename: string, checkTs = false): Promise<any> => {
   const mogrcFileExists = fs.existsSync(filename);
   if (mogrcFileExists) {
-    let mogrcJson;
+    let mogrc;
     if (checkTs) {
-      require('ts-node').register()
-      mogrcJson = require(path.resolve(process.cwd(), filename));
-      if (mogrcJson && mogrcJson.default) {
-        mogrcJson = mogrcJson.default;
-      }
+      mogrc = await getTSConfig(filename) as any;
     } else {
-      mogrcJson = require(path.resolve(process.cwd(), filename));
+      mogrc = require(path.resolve(process.cwd(), filename));
     }
-    if (mogrcJson) { 
-      mogrcJson.user = setUserFn(mogrcJson);
-      return mogrcJson as MograteConfig;
+    if (mogrc) { 
+      if (typeof mogrc === 'function') {
+        mogrc = mogrc();
+        if (mogrc.then) {
+          mogrc = await (mogrc as any);
+        }
+      }
+      mogrc.user = setUserFn(mogrc);
+      if (!path.isAbsolute(mogrc.migrationsDir)) {
+        const parent = path.resolve(process.cwd(), path.dirname(filename))
+        mogrc.migrationsDir = path.resolve(parent, mogrc.migrationsDir);
+      }
+      return mogrc as MograteConfig;
     }
   }
 }
 
-const getConfig = (): MograteConfig => {
+const getConfig = async (): Promise<MograteConfig> => {
 
     var argv = require('minimist')(process.argv.slice(2));
     const [command,] = argv._;
@@ -84,12 +160,12 @@ const getConfig = (): MograteConfig => {
      *
      **/
     if (argv.config) {
-        const configFileContents = getFileConfig(argv.config);
+        const configFileContents = await getFileConfig(argv.config, argv.config.split('.').includes('ts'));
         if (configFileContents) {
             return configFileContents;
         }
 
-        console.error(`${argv.config} does not exist.`);
+        logger.error(`${argv.config} does not exist.`);
         return process.exit(1);
     }
 
@@ -100,7 +176,7 @@ const getConfig = (): MograteConfig => {
      **/
 
     // check package.json first
-    const packageJson = getPackageConfig();
+    const packageJson = await getPackageConfig();
     if (packageJson) {
         return packageJson;
     }
@@ -108,19 +184,19 @@ const getConfig = (): MograteConfig => {
     const mogrc = '.mogrc';
 
     // check for .mogrc.json
-    const morgrcJsonFileJson = getFileConfig(`${mogrc}.json`);
+    const morgrcJsonFileJson = await getFileConfig(`${mogrc}.json`);
     if (morgrcJsonFileJson) {
         return morgrcJsonFileJson;
     }
 
     // check for .mogrc.js
-    const morgrcJsFileObj = getFileConfig(`${mogrc}.js`);
+    const morgrcJsFileObj = await getFileConfig(`${mogrc}.js`);
     if (morgrcJsFileObj) {
         return morgrcJsFileObj;
     }
 
     // check for .mogrc.ts
-    const morgrcTsFileObj = getFileConfig(`${mogrc}.ts`, true);
+    const morgrcTsFileObj = await getFileConfig(`${mogrc}.ts`, true);
     if (morgrcTsFileObj) {
         return morgrcTsFileObj;
     }
@@ -145,7 +221,7 @@ const validateConfig = (config: MograteConfig): MograteConfig => {
         !(config.awsConfig as any).secretAccessKey ||
         !(config.awsConfig as any).accessKeyId
       ) {
-        console.error(`You must specify 'awsConfig' in config. See documentation`);
+        logger.error(`You must specify 'awsConfig' in config. See documentation`);
         process.exit(1);
       } else if (!(config.awsConfig as any).region) {
         (config.awsConfig as any).region = 'us-east-1';
@@ -218,4 +294,13 @@ const validateConfig = (config: MograteConfig): MograteConfig => {
   return config;
 }
 
-export const config = validateConfig(getConfig());
+export class Config {
+  private static  _config;
+  static get() {
+    return this._config;
+  }
+  static async init() {
+    const c = await getConfig();
+    this._config = validateConfig(c);
+  }
+}

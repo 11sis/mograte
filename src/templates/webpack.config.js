@@ -10,9 +10,13 @@ module.exports = {
 
   },
   resolve: {
-    extensions: ['.ts'],
+    extensions: ['.ts', '.js', '.cjs', '.mjs', '.mts'],
     symlinks: true,
     cacheWithContext: false,
+    modules: [
+      path.resolve('../../', __dirname, 'node_modules'), // Custom location
+      'node_modules' // The default Node.js modules directory
+    ],
   },
   output: {
     libraryTarget: 'commonjs',

@@ -1,17 +1,30 @@
-const AWS = require('aws-sdk');
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { ItemOperations } from './item-operations';
 import { TableOperations } from './table-operations';
 
+// const { Agent } = require("https");
+// const { Agent: HttpAgent } = require("http");
+const { NodeHttpHandler } = require("@smithy/node-http-handler");
+const clientConfig = {
+  requestHandler: new NodeHttpHandler({
+    connectionTimeout: 5000,
+    socketTimeout: 5000,
+  }),
+};
+
+const client = new DynamoDBClient(clientConfig);
+const ddbDocClient = DynamoDBDocumentClient.from(client);
 
 export class MigrationContext {
     private _table: TableOperations;
     private _item: ItemOperations;
     constructor(
-        private ddb = new AWS.DynamoDB(),
-        private ddocClient = new AWS.DynamoDB.DocumentClient()
+        private ddb = client,
+        private ddocClient = ddbDocClient
     ) {
-        this._table = new TableOperations(ddb);
-        this._item = new ItemOperations(ddocClient);
+        this._table = new TableOperations(this.ddb);
+        this._item = new ItemOperations(this.ddocClient);
     }
 
     get table () {

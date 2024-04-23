@@ -1,11 +1,13 @@
 import { createMigration } from './create';
-import { getDelta, listMigrations, migrateDown, migrateUp } from './migrate';
+import { getDelta, listMigrations, migrateDown, migrateUp, resetMigrationsTable } from './migrate';
 import { writeMogrationConfig } from './init';
 import { runHelp } from './help';
+import { Config } from './config';
 export * from './types';
 export * from './classes';
 
 export const runStuff = async () => {
+  await Config.init();
 
   const argv = require('minimist')(process.argv.slice(2));
   const [command, positional,] = argv._;
@@ -27,6 +29,9 @@ export const runStuff = async () => {
   }
   if (command === 'down') {
     await migrateDown((positional || '').toString());
+  }
+  if (command === 'nuclear') {
+    await resetMigrationsTable();
   }
   if (command === 'delta') {
     const delta = await getDelta();

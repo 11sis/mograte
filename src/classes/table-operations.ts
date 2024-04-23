@@ -1,56 +1,56 @@
-import { DynamoTableDefinition } from "../types";
+import { CreateTableCommand, CreateTableCommandInput, DeleteTableCommand, DescribeTableCommand, DynamoDBClient, waitUntilTableExists, waitUntilTableNotExists } from '@aws-sdk/client-dynamodb';
 import { Operation } from "./operation";
 
 export class TableOperations extends Operation {
     constructor(
-        private ddb: any
+        private ddb: DynamoDBClient
     ) {
         super();
     }
-    private async waitForTableExistanceAsync (tableName: string, exists: boolean): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const params = { TableName: tableName };
-            this.ddb.waitFor(exists ? 'tableExists' : 'tableNotExists', params, (err: any) => {
-                if (err) return reject(err);
-                resolve();
-            })
-        });
+    private async waitForTableExistenceAsync (tableName: string, exists: boolean): Promise<void> {
+      const params = { TableName: tableName };
+      const fn = exists ? waitUntilTableExists : waitUntilTableNotExists;
+      await fn({ client: this.ddb } as any, params)
     }
 
     async waitForExistAsync (tableName: string): Promise<void> {
-        return this.waitForTableExistanceAsync(tableName, true);
+        return this.waitForTableExistenceAsync(tableName, true);
     }
 
     async waitForNotExistAsync (tableName: string): Promise<void> {
-        return this.waitForTableExistanceAsync(tableName, false);
+        return this.waitForTableExistenceAsync(tableName, false);
     }
 
     async existsAsync (tableName: string): Promise<any> {
-        return new Promise((resolve) => {
-            const params = { TableName: tableName };
-            this.ddb.describeTable(params, (err: any, data: any) => {
-                if (err) return resolve(false);
-                resolve(data);
-            });
-        });
+      const params = { TableName: tableName };
+      const command = new DescribeTableCommand(params);
+      let data;
+      try {
+        data = await this.ddb.send(command);
+      } catch (err: any) {
+        if (err.stack.includes('ResourceNotFoundException')) {
+          data = false;
+        } else {
+          throw err;
+        }
+      }
+      return data;
     }
 
-    async createAsync (tableDefinition: DynamoTableDefinition): Promise<any> {
+    async createAsync (tableDefinition: CreateTableCommandInput): Promise<any> {
+
+      
         const tableCreatorAsync = async () => {
-            return new Promise((resolve, reject) => {
-                this.ddb.createTable(tableDefinition, (err: any, data: any) => {
-                    if (err) return reject(err);    
-                    resolve(data);
-                });
-            });
+          const data = await this.ddb.send(new CreateTableCommand(tableDefinition));
+          return data;
         }
 
         return this.safeRunAsync(
             `There was a **problem** creating table ${tableDefinition.TableName} ...`,
             async () => {
-                await this.waitForNotExistAsync(tableDefinition.TableName);
+                await this.waitForNotExistAsync(tableDefinition.TableName as string);
                 const tableResult = await tableCreatorAsync();
-                await this.waitForExistAsync(tableDefinition.TableName);
+                await this.waitForExistAsync(tableDefinition.TableName as string);
                 return Promise.resolve(tableResult);
             }
         );
@@ -58,13 +58,8 @@ export class TableOperations extends Operation {
 
     async deleteAsync (tableName: string): Promise<any> {
         const tableRemoverAsync = async () => {
-            return new Promise((resolve, reject) => {
-                const params = { TableName: tableName };
-                this.ddb.deleteTable(params, (err: any, data: any) => {
-                    if (err) return reject(err);    
-                    resolve(data);
-                });
-            });
+          const data = await this.ddb.send(new DeleteTableCommand({ TableName: tableName }));
+          return data;
         }
 
         return this.safeRunAsync(

@@ -80,7 +80,7 @@ export const writeMogrationConfig = async () => {
         default: 'y',
         choices: ['yes', 'no', 'y', 'n']
       }, {
-        when: (answers) => ~answers.specifyTsConfig.indexOf('y'),
+        when: (answers) => (answers.specifyTsConfig || '').split().includes('y'),
         validate: function (input: string) {
           const done = this.async();
 
